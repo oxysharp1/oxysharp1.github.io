@@ -302,7 +302,12 @@
 
         <div id="settingsScreen" class="screen">
             <h2 class="settings-title">⚙️ НАСТРОЙКИ</h2>
-            <p class="settings-label">Сложность:</p>
+            
+            <p class="settings-label">Размер поля:</p>
+            <button class="button difficulty-btn" onclick="selectGridMode(0)" id="grid0">Квадратное поле (16x16)</button>
+            <button class="button difficulty-btn selected" onclick="selectGridMode(1)" id="grid1">Вытянутое поле (16x32)</button>
+            
+            <p class="settings-label" style="margin-top: 4vh;">Сложность:</p>
             <button class="button difficulty-btn" onclick="selectDifficulty(0)" id="diff0">Очень легко (3 FPS)</button>
             <button class="button difficulty-btn" onclick="selectDifficulty(1)" id="diff1">Легко (5 FPS)</button>
             <button class="button difficulty-btn selected" onclick="selectDifficulty(2)" id="diff2">Средне (7 FPS)</button>
@@ -329,7 +334,11 @@
     </div>
 
     <script>
-        const GRID_SIZE = 16;
+        const GRID_MODES = [
+            { name: 'Квадратное поле (16x16)', width: 16, height: 16 },
+            { name: 'Вытянутое поле (16x32)', width: 16, height: 32 }
+        ];
+
         const DIFFICULTIES = [
             { name: 'Очень легко', fps: 3 },
             { name: 'Легко', fps: 5 },
@@ -350,17 +359,19 @@
 
         let canvas, ctx;
         let cellSize;
-        let canvasSize;
+        let canvasWidth, canvasHeight;
+        let gridWidth, gridHeight;
         let dpr = 1;
         let snake = [];
-        let direction = { x: 1, y: 0 };
-        let nextDirection = { x: 1, y: 0 };
+        let direction = { x: 0, y: 1 };
+        let nextDirection = { x: 0, y: 1 };
         let food = { x: 0, y: 0 };
         let score = 0;
         let highScore = 0;
         let gameState = 'menu';
         let lastMoveTime = 0;
         let currentDifficulty = 2;
+        let currentGridMode = 1;
         let moveDelay;
         let touchStartX = 0;
         let touchStartY = 0;
@@ -372,6 +383,12 @@
             
             dpr = window.devicePixelRatio || 1;
             
+            const savedGridMode = parseInt(localStorage.getItem('snakeGridMode'));
+            if (savedGridMode !== null && savedGridMode >= 0 && savedGridMode < GRID_MODES.length) {
+                currentGridMode = savedGridMode;
+            }
+            
+            updateGridSize();
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
             window.addEventListener('orientationchange', () => {
@@ -388,29 +405,50 @@
             document.addEventListener('keydown', handleKeyboard);
             
             selectDifficulty(currentDifficulty);
+            selectGridMode(currentGridMode);
             gameLoop();
+        }
+
+        function updateGridSize() {
+            const mode = GRID_MODES[currentGridMode];
+            gridWidth = mode.width;
+            gridHeight = mode.height;
         }
 
         function resizeCanvas() {
             const container = document.getElementById('gameContainer');
             const rect = container.getBoundingClientRect();
-            canvasSize = Math.min(rect.width, rect.height);
             
-            canvas.style.width = canvasSize + 'px';
-            canvas.style.height = canvasSize + 'px';
+            const mode = GRID_MODES[currentGridMode];
+            const aspectRatio = mode.width / mode.height;
             
-            canvas.width = canvasSize * dpr;
-            canvas.height = canvasSize * dpr;
+            let width = rect.width;
+            let height = rect.height;
+            
+            if (width / height > aspectRatio) {
+                width = height * aspectRatio;
+            } else {
+                height = width / aspectRatio;
+            }
+            
+            canvasWidth = width;
+            canvasHeight = height;
+            
+            canvas.style.width = canvasWidth + 'px';
+            canvas.style.height = canvasHeight + 'px';
+            
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
             
             ctx.scale(dpr, dpr);
             
-            cellSize = canvasSize / GRID_SIZE;
+            cellSize = canvasWidth / gridWidth;
         }
 
         function resetGame() {
-            snake = [{ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }];
-            direction = { x: 1, y: 0 };
-            nextDirection = { x: 1, y: 0 };
+            snake = [{ x: Math.floor(gridWidth / 2), y: Math.floor(gridHeight / 2) }];
+            direction = { x: 0, y: 1 };
+            nextDirection = { x: 0, y: 1 };
             score = 0;
             generateFood();
             lastMoveTime = Date.now();
@@ -420,8 +458,8 @@
         function generateFood() {
             do {
                 food = {
-                    x: Math.floor(Math.random() * GRID_SIZE),
-                    y: Math.floor(Math.random() * GRID_SIZE)
+                    x: Math.floor(Math.random() * gridWidth),
+                    y: Math.floor(Math.random() * gridHeight)
                 };
             } while (snake.some(segment => segment.x === food.x && segment.y === food.y));
         }
@@ -521,6 +559,25 @@
             }
         }
 
+        function selectGridMode(index) {
+            currentGridMode = index;
+            localStorage.setItem('snakeGridMode', index.toString());
+            
+            for (let i = 0; i < GRID_MODES.length; i++) {
+                const btn = document.getElementById(`grid${i}`);
+                if (btn) {
+                    if (i === index) {
+                        btn.classList.add('selected');
+                    } else {
+                        btn.classList.remove('selected');
+                    }
+                }
+            }
+            
+            updateGridSize();
+            resizeCanvas();
+        }
+
         function handleTouchStart(e) {
             e.preventDefault();
             const touch = e.touches[0];
@@ -611,8 +668,8 @@
             direction = nextDirection;
 
             const head = {
-                x: (snake[0].x + direction.x + GRID_SIZE) % GRID_SIZE,
-                y: (snake[0].y + direction.y + GRID_SIZE) % GRID_SIZE
+                x: (snake[0].x + direction.x + gridWidth) % gridWidth,
+                y: (snake[0].y + direction.y + gridHeight) % gridHeight
             };
 
             if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
@@ -633,21 +690,22 @@
 
         function draw() {
             ctx.fillStyle = COLORS.background;
-            ctx.fillRect(0, 0, canvasSize, canvasSize);
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
             if (gameState === 'menu') return;
 
             ctx.strokeStyle = COLORS.grid;
             ctx.lineWidth = 1;
-            for (let i = 0; i <= GRID_SIZE; i++) {
+            for (let i = 0; i <= gridWidth; i++) {
                 ctx.beginPath();
                 ctx.moveTo(i * cellSize, 0);
-                ctx.lineTo(i * cellSize, canvasSize);
+                ctx.lineTo(i * cellSize, canvasHeight);
                 ctx.stroke();
-                
+            }
+            for (let i = 0; i <= gridHeight; i++) {
                 ctx.beginPath();
                 ctx.moveTo(0, i * cellSize);
-                ctx.lineTo(canvasSize, i * cellSize);
+                ctx.lineTo(canvasWidth, i * cellSize);
                 ctx.stroke();
             }
 
